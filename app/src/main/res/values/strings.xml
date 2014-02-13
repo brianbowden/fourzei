@@ -2,9 +2,9 @@
 <resources>
 
     <string name="app_name">Fourzei</string>
-    <string name="app_desc_1">Display local FourSquare photos through Muzei!</string>
+    <string name="app_desc_1">Display local Foursquare photos through Muzei!</string>
     <string name="app_desc_2">To get started, download Muzei and select Fourzei as your art source. Then you\'re done!</string>
     <string name="muzei_gallery_name">Fourzei</string>
-    <string name="muzei_gallery_desc">Photos from your current location. Powered by FourSquare!</string>
+    <string name="muzei_gallery_desc">Photos from your current location. Powered by Foursquare!</string>
 
 </resources>
