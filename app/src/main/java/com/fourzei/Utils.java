@@ -23,6 +23,24 @@ public class Utils {
         }
     }
 
+    public static float getDataFlt(Context ctx, String field) {
+        try {
+            SharedPreferences prefs = ctx.getSharedPreferences("com.fourzei", Context.MODE_PRIVATE);
+            return prefs.getFloat("com.fourzei." + field.toLowerCase(), -1);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    public static void setDataFlt(Context ctx, String field, float value) {
+        try {
+            SharedPreferences prefs = ctx.getSharedPreferences("com.fourzei", Context.MODE_PRIVATE);
+            prefs.edit().putFloat("com.fourzei." + field.toLowerCase(), value).commit();
+        } catch (Exception e) {
+            Log.d("FOURZEI PREFS", "Error setting pref: " + e.getMessage());
+        }
+    }
+
     public static long getLastRequest(Context ctx) {
         try {
             SharedPreferences prefs = ctx.getSharedPreferences("com.fourzei", Context.MODE_PRIVATE);

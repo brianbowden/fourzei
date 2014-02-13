@@ -3,8 +3,9 @@ package com.fourzei;
 
 import android.content.Context;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -12,9 +13,19 @@ import android.util.Log;
 import com.google.android.apps.muzei.api.Artwork;
 import com.google.android.apps.muzei.api.RemoteMuzeiArtSource;
 
-import java.util.Date;
+import fi.foyt.foursquare.api.FoursquareApi;
+import fi.foyt.foursquare.api.FoursquareApiException;
+import fi.foyt.foursquare.api.Result;
+import fi.foyt.foursquare.api.entities.CompactVenue;
+import fi.foyt.foursquare.api.entities.Photo;
+import fi.foyt.foursquare.api.entities.PhotoGroup;
+import fi.foyt.foursquare.api.entities.VenuesSearchResult;
 
 public class FourzeiArtService extends RemoteMuzeiArtSource {
+
+    public static final String STORE_LL = "LL";
+    public static final String STORE_ALT = "ALT";
+    public static final String STORE_ACC = "ACC";
 
     public static final String EXTRA_STATE = "STATE";
     public static final String EXTRA_TITLE = "TITLE";
@@ -53,36 +64,60 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
     @Override
     public void onTryUpdate(final int reason) throws RetryException {
 
-        String state = Utils.getData(CONTEXT, EXTRA_STATE);
+        LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        Location lkl = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER); // initial course location
 
-        if (state.equals("pending")) {
+        // Kick off the initial location request
+        startService(new Intent(CONTEXT, FourzeiFourSquareService.class));
 
+        FoursquareApi fsApi = new FoursquareApi(Config.FS_CLIENT_ID, Config.FS_CLIENT_SECRET, Config.FS_REDIRECT_URI);
+        String latLong = Utils.getData(CONTEXT, STORE_LL);
 
+        if (latLong == null && lkl != null) {
+            latLong = String.format("%s,%s", lkl.getLatitude(), lkl.getLongitude());
+        }
 
-        } else if (state.equals("complete")) {
-            publishArtwork(new Artwork.Builder()
-                    .title(Utils.getData(CONTEXT, EXTRA_TITLE))
-                    .byline(Utils.getData(CONTEXT, EXTRA_BYLINE))
-                    .imageUri(Uri.parse(Utils.getData(CONTEXT, EXTRA_URI)))
-                    .token(Utils.getData(CONTEXT, EXTRA_TOKEN))
-                    .viewIntent(new Intent("http://foursquare.com/venue/" + Utils.getData(CONTEXT, EXTRA_VENUE_ID)))
-                    .build());
-            Utils.setData(CONTEXT, EXTRA_STATE, "published");
-            scheduleUpdate(System.currentTimeMillis() + ROTATE_TIME_MILLIS);
+        String near = latLong == null ? "New York City, NY" : null; // initial default if nothing else works
+        double alt = Utils.getDataFlt(CONTEXT, STORE_ALT);
+        double acc = Utils.getDataFlt(CONTEXT, STORE_ACC);
 
-        } else {
+        try {
+            Result<VenuesSearchResult> venueResult = fsApi.venuesSearch(latLong, acc > -1 ? acc : null,
+                    alt > -1 ? alt : null, acc > -1 ? acc : null, null, 10, "browse", null, null, null, null, 700, near);
 
-            if (reason == UPDATE_REASON_USER_NEXT) {
-                long lastRequest = Utils.getLastRequest(CONTEXT);
-                if (lastRequest > -1 && new Date().getTime() - lastRequest < NEW_VENUE_THRESHOLD) {
-                    mGoToNextVenue = true;
+            if (venueResult != null && venueResult.getMeta().getCode() == 200 && venueResult.getResult().getVenues() != null
+                    && venueResult.getResult().getVenues().length > 0) {
+
+                int venueIndex = Utils.getRandomIndex(venueResult.getResult().getVenues().length);
+
+                CompactVenue venue = venueResult.getResult().getVenues()[venueIndex];;
+                Result<PhotoGroup> photoGroupResult = fsApi.venuesPhotos(venue.getId(), "venue", 50, 0);
+
+                if (photoGroupResult != null && photoGroupResult.getMeta().getCode() == 200
+                        && photoGroupResult.getResult().getItems() != null) {
+
+                    Photo[] photos = photoGroupResult.getResult().getItems();
+
+                    if (photos.length > 0) {
+                        Photo photo = photos[Utils.getRandomIndex(photos.length)];
+
+                        publishArtwork(new Artwork.Builder()
+                            .title(venue.getName())
+                            .byline(venue.getLocation().getAddress())
+                            .imageUri(Uri.parse(photo.getUrl()))
+                            .token(photo.getId())
+                            .viewIntent(new Intent("http://foursquare.com/venue/" + venue.getId()))
+                            .build());
+                    } else {
+                        Log.e(TAG, "No photos for " + venue.getName());
+                    }
                 }
-
-                Utils.setLastRequest(CONTEXT, new Date().getTime());
             }
 
-            startService(new Intent(CONTEXT, FourzeiFourSquareService.class));
-
+        } catch (FoursquareApiException e) {
+            Log.e(TAG, "Unable to explore Foursquare venues for cool photos. :(");
         }
+
+        scheduleUpdate(System.currentTimeMillis() + ROTATE_TIME_MILLIS);
     }
 }
