@@ -106,7 +106,7 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
                             .byline(venue.getLocation().getAddress())
                             .imageUri(Uri.parse(photo.getUrl()))
                             .token(photo.getId())
-                            .viewIntent(new Intent("http://foursquare.com/venue/" + venue.getId()))
+                            .viewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("http://foursquare.com/venue/" + venue.getId())))
                             .build());
                     } else {
                         Log.e(TAG, "No photos for " + venue.getName());
