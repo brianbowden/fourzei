@@ -42,9 +42,11 @@ public class FourzeiFourSquareService extends Service implements
     @Override
     public void onConnected(Bundle bundle) {
         Location l = mLocationClient.getLastLocation();
-        Utils.setData(CONTEXT, FourzeiArtService.STORE_LL, String.format("%s,%s", l.getLatitude(), l.getLongitude()));
-        Utils.setDataFlt(CONTEXT, FourzeiArtService.STORE_ALT, (float)l.getAltitude());
-        Utils.setDataFlt(CONTEXT, FourzeiArtService.STORE_ACC, l.getAccuracy());
+        if (l != null) {
+            Utils.setData(CONTEXT, FourzeiArtService.STORE_LL, String.format("%s,%s", l.getLatitude(), l.getLongitude()));
+            Utils.setDataFlt(CONTEXT, FourzeiArtService.STORE_ALT, (float)l.getAltitude());
+            Utils.setDataFlt(CONTEXT, FourzeiArtService.STORE_ACC, l.getAccuracy());
+        }
         stopSelf();
     }
 
