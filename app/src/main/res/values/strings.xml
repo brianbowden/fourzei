@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Fourzei</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="muzei_gallery_name">Fourzei</string>
+    <string name="muzei_gallery_desc">Photos from your current location. Powered by FourSquare!</string>
+
+</resources>
