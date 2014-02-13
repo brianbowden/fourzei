@@ -32,16 +32,24 @@ android {
     compileSdkVersion 19
     buildToolsVersion "19.0.1"
 
-    defaultConfig {
-        minSdkVersion 17
-        targetSdkVersion 19
-        versionCode 1
-        versionName "1.0"
+    signingConfigs {
+        debug {
+        }
+        release {
+            storeFile file(System.getenv("KEYSTORE_FOURZAI"))
+            storePassword System.console().readLine("\n\$ Enter keystore password: ")
+            keyAlias "fourzai"
+            keyPassword System.console().readLine("\n\$ Enter key password: ")
+        }
     }
     buildTypes {
-        release {
+        debug {
+            debuggable true
             runProguard false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
+        }
+        release {
+            signingConfig signingConfigs.release
+            runProguard false
         }
     }
 }
