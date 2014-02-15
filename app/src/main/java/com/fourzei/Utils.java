@@ -41,6 +41,24 @@ public class Utils {
         }
     }
 
+    public static long getDataLong(Context ctx, String field) {
+        try {
+            SharedPreferences prefs = ctx.getSharedPreferences("com.fourzei", Context.MODE_PRIVATE);
+            return prefs.getLong("com.fourzei." + field.toLowerCase(), -1);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    public static void setDataLong(Context ctx, String field, long value) {
+        try {
+            SharedPreferences prefs = ctx.getSharedPreferences("com.fourzei", Context.MODE_PRIVATE);
+            prefs.edit().putLong("com.fourzei." + field.toLowerCase(), value).commit();
+        } catch (Exception e) {
+            Log.d("FOURZEI PREFS", "Error setting pref: " + e.getMessage());
+        }
+    }
+
     public static long getLastRequest(Context ctx) {
         try {
             SharedPreferences prefs = ctx.getSharedPreferences("com.fourzei", Context.MODE_PRIVATE);
@@ -61,5 +79,16 @@ public class Utils {
 
     public static int getRandomIndex(int length) {
         return Math.min((int) Math.round(Math.random() * length), length - 1);
+    }
+
+    public static int getRandomIndex(int length, int excludeIndex, int tries) {
+        int index = getRandomIndex(length);
+        if (index != excludeIndex) return index;
+
+        if (tries > 0) {
+            return getRandomIndex(length, excludeIndex, --tries);
+        }
+
+        return -1;
     }
 }

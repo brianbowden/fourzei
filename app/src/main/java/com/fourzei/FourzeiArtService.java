@@ -9,9 +9,15 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.apps.muzei.api.Artwork;
 import com.google.android.apps.muzei.api.RemoteMuzeiArtSource;
+
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import fi.foyt.foursquare.api.FoursquareApi;
 import fi.foyt.foursquare.api.FoursquareApiException;
@@ -26,20 +32,14 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
     public static final String STORE_LL = "LL";
     public static final String STORE_ALT = "ALT";
     public static final String STORE_ACC = "ACC";
+    public static final String STORE_TIME = "TIME";
+    public static final String STORE_CURRENT_PHOTO = "SCP";
 
-    public static final String EXTRA_STATE = "STATE";
-    public static final String EXTRA_TITLE = "TITLE";
-    public static final String EXTRA_BYLINE = "BYLINE";
-    public static final String EXTRA_URI = "URI";
-    public static final String EXTRA_TOKEN = "TOKEN";
-    public static final String EXTRA_VENUE_ID = "VID";
+    public static final long LOCATION_UPDATE_TIME_THRESHOLD = 60000;
 
     private static final String SOURCE_NAME = "FourzeiArtSource";
     private static final String TAG = "FourzeiArtSource";
-    private static final int NEW_VENUE_THRESHOLD = 300000;
-    private static final int TEAM_ID = 11;
     private static final int ROTATE_TIME_MILLIS = 1 * 60 * 60 * 1000; // rotate every hour
-    private static final int POLL_TIME_MILLIS = 1000; // poll once a second
 
     public final Context CONTEXT = this;
 
@@ -88,31 +88,79 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
             if (venueResult != null && venueResult.getMeta().getCode() == 200 && venueResult.getResult().getVenues() != null
                     && venueResult.getResult().getVenues().length > 0) {
 
-                int venueIndex = Utils.getRandomIndex(venueResult.getResult().getVenues().length);
+                List<CompactVenue> venues = new ArrayList<CompactVenue>();
+                for (CompactVenue cv : venueResult.getResult().getVenues()) {
+                    venues.add(cv);
+                }
 
-                CompactVenue venue = venueResult.getResult().getVenues()[venueIndex];;
-                Result<PhotoGroup> photoGroupResult = fsApi.venuesPhotos(venue.getId(), "venue", 50, 0);
+                ArrayList<Photo> photos = new ArrayList<Photo>();
+                int tries = 0;
 
-                if (photoGroupResult != null && photoGroupResult.getMeta().getCode() == 200
-                        && photoGroupResult.getResult().getItems() != null) {
+                while (photos.size() == 0 && tries < 5 && venues.size() > 0) {
+                    tries++;
 
-                    Photo[] photos = photoGroupResult.getResult().getItems();
+                    int venueIndex = Utils.getRandomIndex(venues.size());
 
-                    if (photos.length > 0) {
-                        Photo photo = photos[Utils.getRandomIndex(photos.length)];
+                    CompactVenue venue = venues.get(venueIndex);
+                    Result<PhotoGroup> photoGroupResult = fsApi.venuesPhotos(venue.getId(), "venue", 50, 0);
 
-                        publishArtwork(new Artwork.Builder()
-                            .title(venue.getName())
-                            .byline(venue.getLocation().getAddress())
-                            .imageUri(Uri.parse(photo.getUrl()))
-                            .token(photo.getId())
-                            .viewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("http://foursquare.com/venue/" + venue.getId())))
-                            .build());
+                    if (photoGroupResult != null && photoGroupResult.getMeta().getCode() == 200
+                            && photoGroupResult.getResult().getItems() != null) {
+
+                        for(Photo p : photoGroupResult.getResult().getItems()) {
+                            photos.add(p);
+                        }
+
+                        if (photos.size() > 0) {
+
+                            while (photos.size() > 0) {
+
+                                Photo photo = photos.get(Utils.getRandomIndex(photos.size()));
+
+                                if (photo != null && photo.getUrl() != null && photo.getId() != null &&
+                                        !photo.getId().equals(Utils.getData(CONTEXT, STORE_CURRENT_PHOTO))) {
+
+                                    Log.e(TAG, "Try #" + tries + ": Found a photo for " + venue.getName());
+
+                                    Utils.setData(CONTEXT, STORE_CURRENT_PHOTO, photo.getId());
+
+                                    publishArtwork(new Artwork.Builder()
+                                            .title(venue.getName())
+                                            .byline(venue.getLocation().getAddress())
+                                            .imageUri(Uri.parse(photo.getUrl()))
+                                            .token(photo.getId())
+                                            .viewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("http://foursquare.com/venue/" + venue.getId())))
+                                            .build());
+
+                                    return;
+                                } else {
+                                    Log.e(TAG, "Try #" + tries + ": There was a photo for " + venue.getName() + ", " +
+                                            "but it's corrupted or already displayed");
+                                }
+
+                                photos.remove(photo);
+                            }
+
+                        } else {
+                            Log.e(TAG, "Try #" + tries + ": No photos for " + venue.getName());
+                        }
                     } else {
-                        Log.e(TAG, "No photos for " + venue.getName());
+                        Log.e(TAG, "Try #" + tries + ": No photo group result for " + venue.getName());
                     }
+
+                    venues.remove(venue);
                 }
             }
+
+            Log.e(TAG, "No photos available for your location");
+            Artwork current = getCurrentArtwork();
+            publishArtwork(new Artwork.Builder()
+                    .title("")
+                    .byline("No new photos yet!")
+                    .imageUri(current.getImageUri())
+                    .token(current.getToken())
+                    .viewIntent(current.getViewIntent())
+                    .build());
 
         } catch (FoursquareApiException e) {
             Log.e(TAG, "Unable to explore Foursquare venues for cool photos. :(");
