@@ -120,7 +120,7 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
                                 if (photo != null && photo.getUrl() != null && photo.getId() != null &&
                                         !photo.getId().equals(Utils.getData(CONTEXT, STORE_CURRENT_PHOTO))) {
 
-                                    Log.e(TAG, "Try #" + tries + ": Found a photo for " + venue.getName());
+                                    Log.d(TAG, "Try #" + tries + ": Found a photo for " + venue.getName());
 
                                     Utils.setData(CONTEXT, STORE_CURRENT_PHOTO, photo.getId());
 
@@ -132,9 +132,10 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
                                             .viewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("http://foursquare.com/venue/" + venue.getId())))
                                             .build());
 
+                                    scheduleUpdate(System.currentTimeMillis() + ROTATE_TIME_MILLIS);
                                     return;
                                 } else {
-                                    Log.e(TAG, "Try #" + tries + ": There was a photo for " + venue.getName() + ", " +
+                                    Log.d(TAG, "Try #" + tries + ": There was a photo for " + venue.getName() + ", " +
                                             "but it's corrupted or already displayed");
                                 }
 
@@ -142,10 +143,10 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
                             }
 
                         } else {
-                            Log.e(TAG, "Try #" + tries + ": No photos for " + venue.getName());
+                            Log.d(TAG, "Try #" + tries + ": No photos for " + venue.getName());
                         }
                     } else {
-                        Log.e(TAG, "Try #" + tries + ": No photo group result for " + venue.getName());
+                        Log.d(TAG, "Try #" + tries + ": No photo group result for " + venue.getName());
                     }
 
                     venues.remove(venue);
@@ -153,14 +154,16 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
             }
 
             Log.e(TAG, "No photos available for your location");
-            Artwork current = getCurrentArtwork();
-            publishArtwork(new Artwork.Builder()
-                    .title("")
-                    .byline("No new photos yet!")
-                    .imageUri(current.getImageUri())
-                    .token(current.getToken())
-                    .viewIntent(current.getViewIntent())
-                    .build());
+
+            try {
+                publishArtwork(new Artwork.Builder()
+                        .title("Sorry!")
+                        .byline("No new photos were found")
+                        .imageUri(Uri.parse("http://i.imgur.com/c0Pd3nk.jpg"))
+                        .build());
+            } catch (Exception e) {
+                Log.e(TAG, "Unable to show default artwork");
+            }
 
         } catch (FoursquareApiException e) {
             Log.e(TAG, "Unable to explore Foursquare venues for cool photos. :(");
