@@ -79,7 +79,7 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
                 List<FoursquareApi.Photo> photos = new ArrayList<>();
                 int tries = 0;
 
-                while (photos.size() == 0 && tries < 5 && venues.size() > 0) {
+                while (photos.size() == 0 && tries < 10 && venues.size() > 0) {
                     tries++;
 
                     int venueIndex = Utils.getRandomIndex(venues.size());
@@ -126,6 +126,7 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
 
                         } else {
                             Log.d(TAG, "Try #" + tries + ": No photos for " + venue.getName());
+                            venues.remove(venueIndex);
                         }
                     } else {
                         Log.d(TAG, "Try #" + tries + ": No photo group result for " + venue.getName());
