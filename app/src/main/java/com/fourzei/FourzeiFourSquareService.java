@@ -16,7 +16,7 @@ import android.util.Log;
 
 public class FourzeiFourSquareService extends Service {
 
-    private static final String TAG = "FourzeiFourSquareService";
+    private static final String TAG = "FourzeiFourSquare";
     private final Context CONTEXT = this;
 
     private Binder mBinder = new LocalBinder();
@@ -104,7 +104,7 @@ public class FourzeiFourSquareService extends Service {
     }
 
     public class LocalBinder extends Binder {
-        FourzeiFourSquareService getService() {
+        public FourzeiFourSquareService getService() {
             return FourzeiFourSquareService.this;
         }
     }

@@ -6,26 +6,15 @@ import android.content.Intent;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.android.apps.muzei.api.Artwork;
 import com.google.android.apps.muzei.api.RemoteMuzeiArtSource;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
-import fi.foyt.foursquare.api.FoursquareApi;
-import fi.foyt.foursquare.api.FoursquareApiException;
-import fi.foyt.foursquare.api.Result;
-import fi.foyt.foursquare.api.entities.CompactVenue;
-import fi.foyt.foursquare.api.entities.Photo;
-import fi.foyt.foursquare.api.entities.PhotoGroup;
-import fi.foyt.foursquare.api.entities.VenuesSearchResult;
+import retrofit.RetrofitError;
 
 public class FourzeiArtService extends RemoteMuzeiArtSource {
 
@@ -41,13 +30,13 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
     private static final String TAG = "FourzeiArtSource";
     private static final int ROTATE_TIME_MILLIS = 1 * 60 * 60 * 1000; // rotate every hour
 
-    public final Context CONTEXT = this;
+    private FoursquareApi.FoursquareService mVenueApi;
 
-    private boolean mGoToNextVenue;
-    private Handler mHandler = new Handler(Looper.getMainLooper());
+    public final Context CONTEXT = this;
 
     public FourzeiArtService() {
         super(SOURCE_NAME);
+        mVenueApi = new FoursquareApi().getService();
     }
 
     @Override
@@ -70,7 +59,6 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
         // Kick off the initial location request
         startService(new Intent(CONTEXT, FourzeiFourSquareService.class));
 
-        FoursquareApi fsApi = new FoursquareApi(Config.FS_CLIENT_ID, Config.FS_CLIENT_SECRET, Config.FS_REDIRECT_URI);
         String latLong = Utils.getData(CONTEXT, STORE_LL);
 
         if (latLong == null && lkl != null) {
@@ -78,22 +66,17 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
         }
 
         String near = latLong == null ? "New York City, NY" : null; // initial default if nothing else works
-        double alt = Utils.getDataFlt(CONTEXT, STORE_ALT);
-        double acc = Utils.getDataFlt(CONTEXT, STORE_ACC);
 
         try {
-            Result<VenuesSearchResult> venueResult = fsApi.venuesSearch(latLong, acc > -1 ? acc : null,
-                    alt > -1 ? alt : null, acc > -1 ? acc : null, null, 10, "browse", null, null, null, null, 700, near);
+            FoursquareApi.VenuesMetaResponse venuesResponse = mVenueApi.search(near, latLong);
 
-            if (venueResult != null && venueResult.getMeta().getCode() == 200 && venueResult.getResult().getVenues() != null
-                    && venueResult.getResult().getVenues().length > 0) {
+            if (venuesResponse != null && venuesResponse.getResponse() != null
+                    && venuesResponse.getResponse().getVenues() != null &&
+                    venuesResponse.getResponse().getVenues().size() > 0) {
 
-                List<CompactVenue> venues = new ArrayList<CompactVenue>();
-                for (CompactVenue cv : venueResult.getResult().getVenues()) {
-                    venues.add(cv);
-                }
+                List<FoursquareApi.Venue> venues = venuesResponse.getResponse().getVenues();
 
-                ArrayList<Photo> photos = new ArrayList<Photo>();
+                List<FoursquareApi.Photo> photos = new ArrayList<>();
                 int tries = 0;
 
                 while (photos.size() == 0 && tries < 5 && venues.size() > 0) {
@@ -101,33 +84,32 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
 
                     int venueIndex = Utils.getRandomIndex(venues.size());
 
-                    CompactVenue venue = venues.get(venueIndex);
-                    Result<PhotoGroup> photoGroupResult = fsApi.venuesPhotos(venue.getId(), "venue", 50, 0);
+                    FoursquareApi.Venue venue = venues.get(venueIndex);
+                    FoursquareApi.VenuesMetaResponse photosResponse = mVenueApi.getPhotos(venue.getId());
 
-                    if (photoGroupResult != null && photoGroupResult.getMeta().getCode() == 200
-                            && photoGroupResult.getResult().getItems() != null) {
+                    if (photosResponse != null && photosResponse.getResponse() != null &&
+                            photosResponse.getResponse().getPhotos() != null &&
+                            photosResponse.getResponse().getPhotos().getItems() != null) {
 
-                        for(Photo p : photoGroupResult.getResult().getItems()) {
-                            photos.add(p);
-                        }
+                        photos = photosResponse.getResponse().getPhotos().getItems();
 
                         if (photos.size() > 0) {
 
                             while (photos.size() > 0) {
 
-                                Photo photo = photos.get(Utils.getRandomIndex(photos.size()));
+                                FoursquareApi.Photo photo = photos.get(Utils.getRandomIndex(photos.size()));
 
-                                if (photo != null && photo.getUrl() != null && photo.getId() != null &&
+                                if (photo != null && photo.getPrefix() != null && photo.getSuffix() != null &&
+                                        photo.getId() != null &&
                                         !photo.getId().equals(Utils.getData(CONTEXT, STORE_CURRENT_PHOTO))) {
 
                                     Log.d(TAG, "Try #" + tries + ": Found a photo for " + venue.getName());
-
                                     Utils.setData(CONTEXT, STORE_CURRENT_PHOTO, photo.getId());
 
                                     publishArtwork(new Artwork.Builder()
                                             .title(venue.getName())
                                             .byline(venue.getLocation().getAddress())
-                                            .imageUri(Uri.parse(photo.getUrl()))
+                                            .imageUri(Uri.parse(photo.getOriginalUrl()))
                                             .token(photo.getId())
                                             .viewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("http://foursquare.com/venue/" + venue.getId())))
                                             .build());
@@ -165,7 +147,10 @@ public class FourzeiArtService extends RemoteMuzeiArtSource {
                 Log.e(TAG, "Unable to show default artwork");
             }
 
-        } catch (FoursquareApiException e) {
+        } catch (RetrofitError e) {
+          Log.e(TAG, "HTTP Error while trying to get cool photos. :( URL: " + e.getUrl() + " Response: " + e.getResponse().toString());
+
+        } catch (Exception e) {
             Log.e(TAG, "Unable to explore Foursquare venues for cool photos. :(");
         }
 
