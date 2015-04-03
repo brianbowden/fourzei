@@ -40,9 +40,7 @@ public class FourzeiFourSquareService extends Service {
                 long time = Utils.getDataLong(CONTEXT, FourzeiArtService.STORE_TIME);
                 float acc = Utils.getDataFlt(CONTEXT, FourzeiArtService.STORE_ACC);
 
-                if (l != null && l.getLatitude() != 0 && l.getLongitude() != 0
-                        && (l.getTime() - time > FourzeiArtService.LOCATION_UPDATE_TIME_THRESHOLD || acc < l.getAccuracy())) {
-
+                if (l != null && l.getLatitude() != 0 && l.getLongitude() != 0) {
                     Utils.setData(CONTEXT, FourzeiArtService.STORE_LL, String.format("%s,%s", l.getLatitude(), l.getLongitude()));
                     Utils.setDataFlt(CONTEXT, FourzeiArtService.STORE_ALT, (float) l.getAltitude());
                     Utils.setDataFlt(CONTEXT, FourzeiArtService.STORE_ACC, l.getAccuracy());
